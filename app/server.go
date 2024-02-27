@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"time"
 )
 
 var connNum = 0
@@ -29,15 +30,16 @@ func main() {
 		}
 		connNum += 1
 
-		HandleFunction(conn)
-		conn.Close()
+		go HandleFunction(conn)
 	}
 }
 
 func HandleFunction(conn net.Conn) {
+	defer conn.Close()
 	var buf [256]byte
 
 	fmt.Printf("Processing connection #%v\n", connNum)
+	time.Sleep(time.Second)
 
 	for {
 		n, err := conn.Read(buf[:])
