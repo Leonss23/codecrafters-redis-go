@@ -28,7 +28,6 @@ func main() {
 			os.Exit(1)
 		}
 		HandleRequest(conn)
-		conn.Close()
 	}
 }
 
