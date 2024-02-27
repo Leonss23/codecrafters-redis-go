@@ -6,9 +6,9 @@ import (
 	"os"
 )
 
-func main() {
-	fmt.Println("Logs from your program will appear here!")
+var connNum = 0
 
+func main() {
 	protocol := "tcp"
 	ip := "0.0.0.0"
 	port := 6379
@@ -21,18 +21,23 @@ func main() {
 	}
 	defer listener.Close()
 
-	conn, err := listener.Accept()
-	if err != nil {
-		fmt.Println("Error accepting connection: ", err.Error())
-		os.Exit(1)
-	}
-	defer conn.Close()
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			fmt.Println("Error accepting connection: ", err.Error())
+			break
+		}
+		connNum += 1
 
-	HandleRequest(conn)
+		HandleFunction(conn)
+		conn.Close()
+	}
 }
 
-func HandleRequest(conn net.Conn) {
+func HandleFunction(conn net.Conn) {
 	var buf [256]byte
+
+	fmt.Printf("Processing connection #%v\n", connNum)
 
 	for {
 		n, err := conn.Read(buf[:])
@@ -40,8 +45,8 @@ func HandleRequest(conn net.Conn) {
 			fmt.Println("Failed to read data from connection.\nError:", err)
 			break
 		}
-		dataIn := buf[:n]
-		fmt.Printf("Connection data [%v]:\n%v\n", n, string(dataIn))
+		received := buf[:n]
+		fmt.Printf("Received: %v bytes\n```\n%v```\n", n, string(received))
 
 		response := []byte("+PONG\r\n")
 		n, err = conn.Write(response)
@@ -49,6 +54,6 @@ func HandleRequest(conn net.Conn) {
 			fmt.Println("Failed to write to connection.\nError:", err)
 			break
 		}
-		fmt.Println("Wrote", n, "bytes to connection")
+		fmt.Printf("Sent: %v bytes\n```\n%v```\n", n, string(response))
 	}
 }
