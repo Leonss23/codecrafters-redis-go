@@ -32,6 +32,8 @@ func main() {
 }
 
 func HandleRequest(conn net.Conn) {
+	defer conn.Close()
+
 	buf := make([]byte, 256)
 
 	{
