@@ -19,10 +19,35 @@ func main() {
 		fmt.Println("Failed to bind to port", port, "\nError:", err)
 		os.Exit(1)
 	}
+	defer listener.Close()
 
-	_, err = listener.Accept()
+	conn, err := listener.Accept()
 	if err != nil {
 		fmt.Println("Error accepting connection: ", err.Error())
 		os.Exit(1)
+	}
+	defer conn.Close()
+	HandleRequest(conn)
+}
+
+func HandleRequest(conn net.Conn) {
+	buf := make([]byte, 256)
+
+	{
+		n, err := conn.Read(buf)
+		if err != nil {
+			fmt.Println("Failed to read data from connection.\nError:", err)
+		}
+
+		fmt.Println("Connection data [", n, "]:", string(buf))
+	}
+
+	response := "+PONG\r\n"
+	{
+		n, err := conn.Write([]byte(response))
+		if err != nil {
+			fmt.Println("Failed to write to connection.\nError:", err)
+		}
+		fmt.Println("Wrote", n, "bytes to connection")
 	}
 }
