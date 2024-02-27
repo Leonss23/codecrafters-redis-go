@@ -21,35 +21,33 @@ func main() {
 	}
 	defer listener.Close()
 
-	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			fmt.Println("Error accepting connection: ", err.Error())
-			os.Exit(1)
-		}
-		HandleRequest(conn)
+	conn, err := listener.Accept()
+	if err != nil {
+		fmt.Println("Error accepting connection: ", err.Error())
+		os.Exit(1)
 	}
+	defer conn.Close()
+
+	HandleRequest(conn)
 }
 
 func HandleRequest(conn net.Conn) {
-	defer conn.Close()
+	var buf [256]byte
 
-	buf := make([]byte, 256)
-
-	{
-		n, err := conn.Read(buf)
+	for {
+		n, err := conn.Read(buf[:])
 		if err != nil {
 			fmt.Println("Failed to read data from connection.\nError:", err)
+			break
 		}
+		dataIn := buf[:n]
+		fmt.Printf("Connection data [%v]:\n%v\n", n, string(dataIn))
 
-		fmt.Println("Connection data [", n, "]:", string(buf))
-	}
-
-	response := "+PONG\r\n"
-	{
-		n, err := conn.Write([]byte(response))
+		response := []byte("+PONG\r\n")
+		n, err = conn.Write(response)
 		if err != nil {
 			fmt.Println("Failed to write to connection.\nError:", err)
+			break
 		}
 		fmt.Println("Wrote", n, "bytes to connection")
 	}
