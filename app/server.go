@@ -14,7 +14,10 @@ func main() {
 
 const DEFAULT_REDIS_PORT = 6379
 
+type RedisDB map[string]string
+
 func run() {
+	db := make(RedisDB)
 	port := DEFAULT_REDIS_PORT
 	host := fmt.Sprintf(":%v", port)
 	listener, err := net.Listen("tcp", host)
@@ -32,11 +35,11 @@ func run() {
 			break
 		}
 
-		go handleFunction(conn)
+		go handleFunction(conn, db)
 	}
 }
 
-func handleFunction(conn net.Conn) {
+func handleFunction(conn net.Conn, rdb RedisDB) {
 	defer conn.Close()
 
 	var buf [256]byte
@@ -58,20 +61,47 @@ func handleFunction(conn net.Conn) {
 		args, errMsg := parseRedisCommand(string(received))
 		if errMsg != "" {
 			response = errMsg
-		}
-		switch strings.ToUpper(args[0]) {
-		case "ECHO":
-			response = makeResponse(args[1])
-
-		case "PING":
-			response = makeResponse("PONG")
-
+		} else {
+			response = handleCommand(args, rdb)
 		}
 
 		_, err = conn.Write([]byte(response))
 		if err != nil {
 			fmt.Println("Failed to write to connection.\nError:", err)
 			break
+		}
+	}
+}
+
+func handleCommand(args []string, db RedisDB) string {
+	command := args[0]
+	argsLen := len(args)
+
+	switch strings.ToLower(command) {
+	default:
+		return makeResponse("+Invalid or unsupported Redis command.")
+	case "ping":
+		return makeResponse("+PONG")
+	case "echo":
+		if argsLen < 2 {
+			return makeResponse("+ECHO command requires an argument")
+		}
+		return makeResponse(fmt.Sprintf("+%s", args[1]))
+	case "set":
+		if argsLen < 3 {
+			return makeResponse("+SET command requires KEY and VALUE arguments")
+		}
+		key, value := args[1], args[2]
+		db[key] = value
+		return makeResponse("+OK")
+	case "get":
+		key := args[1]
+		value, exists := db[key]
+		if exists {
+			length := fmt.Sprintf("$%v", len(value))
+			return makeResponse(length, value)
+		} else {
+			return makeResponse("$-1")
 		}
 	}
 }
@@ -104,6 +134,13 @@ func parseRedisCommand(input string) ([]string, string) {
 	return args, ""
 }
 
-func makeResponse(s string) string {
-	return fmt.Sprintf("+%s\r\n", s)
+func makeResponse(s ...string) string {
+	var sb strings.Builder
+	for _, str := range s {
+		sb.WriteString(str)
+		sb.WriteString("\r\n")
+	}
+	response := sb.String()
+	fmt.Println(response)
+	return response
 }
