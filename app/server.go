@@ -6,6 +6,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func main() {
@@ -14,7 +15,12 @@ func main() {
 
 const DEFAULT_REDIS_PORT = 6379
 
-type RedisDB map[string]string
+type RedisDB map[string]Data
+
+type Data struct {
+	Value   string
+	Expires time.Time
+}
 
 func run() {
 	db := make(RedisDB)
@@ -54,7 +60,7 @@ func handleFunction(conn net.Conn, rdb RedisDB) {
 			break
 		}
 		received := buf[:n]
-		fmt.Printf("Received: %v bytes\n```\n%v```\n", n, string(received))
+		fmt.Println("Received:", n, "bytes")
 
 		var response string
 
@@ -73,13 +79,15 @@ func handleFunction(conn net.Conn, rdb RedisDB) {
 	}
 }
 
+var BAD = makeResponse("+Invalid or unsupported Redis command.")
+
 func handleCommand(args []string, db RedisDB) string {
 	command := args[0]
 	argsLen := len(args)
 
 	switch strings.ToLower(command) {
 	default:
-		return makeResponse("+Invalid or unsupported Redis command.")
+		return BAD
 	case "ping":
 		return makeResponse("+PONG")
 	case "echo":
@@ -88,21 +96,40 @@ func handleCommand(args []string, db RedisDB) string {
 		}
 		return makeResponse(fmt.Sprintf("+%s", args[1]))
 	case "set":
-		if argsLen < 3 {
-			return makeResponse("+SET command requires KEY and VALUE arguments")
+		switch argsLen {
+		default:
+			return BAD
+		case 3:
+			key, value := args[1], args[2]
+			db[key] = Data{
+				Value:   value,
+				Expires: time.Now().AddDate(500, 0, 0),
+			}
+		case 5:
+			if args[3] != "px" {
+				return BAD
+			}
+			key, value, expires := args[1], args[2], args[4]
+			expiration, _ := strconv.Atoi(expires)
+			db[key] = Data{
+				Value:   value,
+				Expires: time.Now().Add(time.Millisecond * time.Duration(expiration)),
+			}
 		}
-		key, value := args[1], args[2]
-		db[key] = value
 		return makeResponse("+OK")
 	case "get":
 		key := args[1]
-		value, exists := db[key]
-		if exists {
-			length := fmt.Sprintf("$%v", len(value))
-			return makeResponse(length, value)
-		} else {
+		data, exists := db[key]
+
+		if !exists {
 			return makeResponse("$-1")
 		}
+		if data.Expires.Before(time.Now()) {
+			return makeResponse("$-1")
+		}
+		length := fmt.Sprintf("$%v", len(data.Value))
+		return makeResponse(length, data.Value)
+
 	}
 }
 
